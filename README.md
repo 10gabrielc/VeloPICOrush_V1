@@ -1,0 +1,2 @@
+# VeloPICOrush_V1
+ This project is a both a remastering of a previous project and a shift to a different programming language/microcontroller. The previous project, VeloNOrush, was C++ and Arduino UNO based. This rework will be CircuitPython and Raspberry Pi Pico based. The goal of this rework is to create a more efficient and consistent device than the previous version, as well as add new features such as USB keyboard input and more enhanced LED animations.

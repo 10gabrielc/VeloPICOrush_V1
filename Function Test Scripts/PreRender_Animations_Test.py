@@ -166,12 +166,14 @@ print("Left side of sprite location: ", end="")
 print(leftLocation)
 print("Right side of sprite location: ", end="")
 print(rightLocation)
+print("Size of the sprite, horizontally: ", end="")
 print(spriteSizeX)
 
 # create the customized sprite array, taking data from a specific area in the frame buffer
 # we use the size of the sprite (x, y) to only read what we need, and we use the top and left
 # locations to adjust the for loop counters
 # we also print out the data going into the array to see what is happening
+circle_size1 = array.array('B')
 for spriteRow in range(spriteSizeY):
     for spriteCol in range(spriteSizeX):
         tempVar = ReadFrameBufferArray(spriteRow + topLocation, spriteCol + leftLocation)
@@ -179,7 +181,7 @@ for spriteRow in range(spriteSizeY):
         print(tempVar, end=" ")
     print("")
 
-"""
+
 # test the ability to generate and return arrays of different sizes, and store them
 # in previously made arrays even though they had no data within them
 circle_size2 = array.array('B')
@@ -196,7 +198,6 @@ circle_size2 = TestReturningArrays()
 print(circle_size2)
 
 # THIS PROCESS WORKS! THIS WILL BE UTILIZED NOW AFTER THIS SECTION
-"""
 
 """ SECOND TEST: CREATE FUNCTIONS THAT AUTOMATE THE PROCESS OF USING MATH TO GENERATE A CIRCLE, THEN STORING THAT DATA
     INTO A SMALLER, CUSTOM SPRITE BUFFER. WE START BY CREATING SOME FUNCTIONS
@@ -370,7 +371,6 @@ def PlaceSpriteOnFrameBuffer(spriteToPlace, locX, locY):
             WriteFrameBufferArray(spriteRow + startY, spriteCol + startX, pixelToPlace)
 
 # test some placements, and time the process
-print("Time it took to place these three circles onto the framebuffer")
 start = time.monotonic_ns()
 ClearFrameBufferArray()
 PlaceSpriteOnFrameBuffer(circle_size02, 7, 7)
@@ -378,8 +378,7 @@ PlaceSpriteOnFrameBuffer(circle_size00, 3, 3)
 #\PlaceSpriteOnFrameBuffer(circle_size01, 10, 10)
 ms_duration = (((time.monotonic_ns() - start) + 500000)
                // 1000000) #I removed a zero here
-print("")
-print("------------------------------------------")
+print("Time it took to place these three circles onto the framebuffer: ", end="")
 print(ms_duration)
 
 #print out the frame buffer to see how the data is looking

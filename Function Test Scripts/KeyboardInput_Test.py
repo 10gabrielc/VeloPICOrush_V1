@@ -1,12 +1,9 @@
 """
-   THIS SCRIPT SERVES TO TEST THE VELOSTAT-BASED SENSOR MATRIX, WITH
-   A CD4067 MUX ARRAY MINIMIZING THE REQUIRED WIRES AND CONNECTIONS NEEDED.
-   THE SCRIPT SETS THE TWO MUXES TO ALLOW ANY SENSOR TO BE READ. AFTER READING
-   ALL SENSORS, THE DATA IS CALIBRATED AND TRANSLATED INTO A MORE USEFUL FORM.
-   THIS SCRIPT GENERATES AN OUTPUT OF 4 DIRECTIONAL BUTTONS, WITH CERTAIN
-   REGIONS SERVING AS UP, RIGHT, DOWN, AND LEFT DIRECTIONS. THERE IS ALSO A
-   PUSH BUTTON TO RESET CALIBRATION VALUES IF THE MATRIX IS NOT WORKING
-   PROPERLY.
+   THIS SCRIPT SERVES TO TEST THE KEYBOARD FUNCTIONALITY OF THE
+   RASPBERRY PI PICO USING CIRCUITPYTHON AND THE ADAFRUIT hid LIBRARY.
+   THE ENTIRETY OF THE SensorMatrix_Test SCRIPT WILL BE USED FOR
+   SENSOR ARRAY POLLING, BUT NEW FUNCTIONS TO INTERACT WITH THE PC
+   WILL BE ADDED TO UTILIZE THE SENSOR DATA.
 """
 
 # IMPORT ALL NEEDED LIBRARIES
@@ -15,6 +12,9 @@ from digitalio import DigitalInOut, Direction, Pull       # IMPORTS ABILITY TO M
 import analogio                                           # IMPORTS USAGE OF ANALOG PINS ON PICO
 import array                                              # IMPORTS ABILITY TO USE DATA ARRAYS
 import time                                               # IMPORTS USAGE OF SYTEM TIME
+import usb_hid                                            # IMPORTS KEYBOARD FUNCTIONALITY
+from adafruit_hid.keyboard import Keyboard
+from adafruit_hid.keycode import Keycode
 
 """INITIALIZE ALL NEEDED PINS, SETTING PIN DIRECTIONS AND NUMBERS"""
 # OBJECTS TO REPRESENT THE OUTPUT MUX SELECTION PINS
@@ -39,14 +39,24 @@ muxInDpin = DigitalInOut(board.GP9)
 muxInDpin.direction = Direction.OUTPUT
 # OBJECTS TO REPRESENT ADDITIONAL NEEDED PINS
 voltageInPin = analogio.AnalogIn(board.GP26)      # pin to respresent analog reading pin for reading sensor voltage
-calibResetPin = DigitalInOut(board.GP10)          # pin to represent digital reading pin for calibration reset
+calibResetPin = DigitalInOut(board.GP11)          # pin to represent digital reading pin for calibration reset
 calibResetPin.direction = Direction.INPUT
 calibResetPin.pull = Pull.UP
+allowKbPin = DigitalInOut(board.GP10)       # pin to enable or disable keyboard interaction
+allowKbPin.direction = Direction.INPUT
+allowKbPin.pull = Pull.UP
 
 """CONSTANTS ABOUT THE SENSOR MATRIX"""
 numOfSensorRows = 12
 numOfSensorCols = 8
 numOfSensors = 96
+"""CONSTANTS FOR KEYPRESS FUNCTIONS"""
+UpIndex = 0
+RightIndex = 1
+DownIndex = 2
+LeftIndex = 3
+StyleDDR = 0
+StylePIU = 1
 
 """ALL FUNCTIONS RELATED TO READING AND WRITING FROM GLOBAL DATA ARRAYS"""
 # FUNCTIONS FOR ARRAY THAT STORE THE LOW RANGE CALIBRATION DATA
@@ -84,7 +94,11 @@ def WriteSensorDetectionArray(row, col, value):
 def ReadSensorDetectionArray(row, col):
     index = (row * numOfSensorCols) + col
     return sensorData_detection[index]
-
+# FUNCTIONS FOR ARRAY THAT STORES KEYPRESS STATUS
+def WriteKeypressArray(index, value):
+    keypress_data[index] = value
+def ReadKeypressArray(index):
+    return keypress_data[index]
 
 """ALL FUNCTIONS RELATED TO PERFORMING ALGORITHMS AND POLLING SENSORS"""
 # FUNCTION TO REMAP AN INTEGER OF ONE RANGE INTO ANOTHER RANGE
@@ -189,7 +203,7 @@ def CalibrateLow():
 # ACCEPTS ROW AND COLUMN, AND RETURNS NOTHING
 def CalibrateThreshold(row, col):
     # CONSTANTS NEEDED FOR THE FUNCTION
-    thresholdPercentage = 0.4      # constant that determines where inbetween high/low the threshold should be
+    thresholdPercentage = 0.35      # constant that determines where inbetween high/low the threshold should be
     
     # GET THE REQUIRED INFORMATION FROM ARRAYS
     lowValue = ReadSensorArray_LowData(row, col)
@@ -297,9 +311,9 @@ def CheckArrowPressesDDR():
 
     # CHECK THE NUMBER OF PRESS OCCURANCES. IF IT IS LARGER THAN THE THRESHOLD, TREAT IT
     # AS A TRUE ARROW PRESS. THESE VALUES CAN BE ADJUSTED TO ENHANCE SENSITIVITY
-    upPress = (upPasses > 4)
+    upPress = (upPasses > 3)
     rightPress = (rightPasses > 3)
-    downPress = (downPasses > 4)
+    downPress = (downPasses > 3)
     leftPress = (leftPasses > 3)
     
     # RETURN THE RESULTS OF EACH ARROW PRESS AS PACKED VARIABLE
@@ -330,6 +344,110 @@ def PrintSensorsVsThresholds():
         for colCounterThreshold in range(numOfSensorCols):
             print(ReadSensorArray_ThresholdData(rowCounter, colCounterThreshold), end=" ")
         print("")
+        
+"""ALL FUNCTIONS FOR SENDING KEYBOARD INTERACTIONS TO THE PC"""
+
+def CheckKeyboardEnabled():
+    enabledSwitch = allowKbPin.value
+    if enabledSwitch == 0:
+        return True
+    else:
+        return False
+
+def SendKeypress(directionVal, gameStyle):
+    # BASED OFF CURRENT GAME STYLE, SEND A SPECIFIC SET OF KEYBOARD KEYSTROKES
+    if gameStyle == StyleDDR:              # for Dance Dance Revolution gameplay
+        # CHECK THROUGH POSSIBLE KEY INDEXES FOR DDR
+        # TO SEND THE CORRECT KEYSTROKE
+        if directionVal == UpIndex:
+            picoKeyboard.press(Keycode.UP_ARROW)
+        elif directionVal == RightIndex:
+            picoKeyboard.press(Keycode.RIGHT_ARROW)
+        elif directionVal == DownIndex:
+            picoKeyboard.press(Keycode.DOWN_ARROW)
+        elif directionVal == LeftIndex:
+            picoKeyboard.press(Keycode.LEFT_ARROW)
+        else:
+            print("Keypress Index error. Check code!")
+    else:                                              # for Pump It Up gameplay
+        # CHECK THROUGH POSSIBLE KEY INDEXES FOR PIU
+        # TO SEND THE CORRECT KEYSTROKE
+        if directionVal == upLeftIndex:
+            picoKeyboard.press(Keycode.Q)
+        elif directionVal == upRightIndex:
+            picoKeyboard.press(Keycode.E)
+        elif direcitonVal == centerIndex:
+            picoKeyboard.press(Keycode.S)
+        elif directionVal == downRightIndex:
+            picoKeyboard.press(Keycode.C)
+        elif directionVal == downLeftIndex:
+            picoKeyboard.press(Keycode.Z)
+        else:
+            print("Keypress Index Error. Check Code!")
+
+def SendKeyrelease(directionVal, gameStyle):
+    # BASED OFF CURRENT GAME STYLE, SEND A SPECIFIC SET OF KEYBOARD KEY-RELEASES
+    if gameStyle == StyleDDR:                          # for Dance Dance Revolution gameplay
+        # CHECK THROUGH POSSIBLE KEY INDEXES FOR DDR
+        # TO SEND THE CORRECT KEYSTROKE
+        if directionVal == UpIndex:
+            picoKeyboard.release(Keycode.UP_ARROW)
+        elif directionVal == RightIndex:
+            picoKeyboard.release(Keycode.RIGHT_ARROW)
+        elif directionVal == DownIndex:
+            picoKeyboard.release(Keycode.DOWN_ARROW)
+        elif directionVal == LeftIndex:
+            picoKeyboard.release(Keycode.LEFT_ARROW)
+        else:
+            print("Keyrelease Index error. Check code!")
+    else:                                              # for Pump It Up gameplay
+        # CHECK THROUGH POSSIBLE KEY INDEXES FOR PIU
+        # TO SEND THE CORRECT KEYSTROKE
+        if directionVal == upLeftIndex:
+            picoKeyboard.release(Keycode.Q)
+        elif directionVal == upRightIndex:
+            picoKeyboard.release(Keycode.E)
+        elif direcitonVal == centerIndex:
+            picoKeyboard.release(Keycode.S)
+        elif directionVal == downRightIndex:
+            picoKeyboard.release(Keycode.C)
+        elif directionVal == downLeftIndex:
+            picoKeyboard.release(Keycode.Z)
+        else:
+            print("Keyrelease Index Error. Check Code!")
+
+def KeyboardControl(arrowPresses, gameStyle, keyControlEnabled):
+    # ITERATE THROUGH THE ARROW PRESSES, CHECKING IF A KEYBOARD ACTION NEEDS TO BE PERFORMED
+    for keyCounter in range(5):
+        # EXTRACT ARROW PRESS FROM PACKED VARIABLE, AND GET GLOBAL PRESS STATUS
+        currentPress = arrowPresses[keyCounter]
+        currentStatus = ReadKeypressArray(keyCounter)
+        
+        # FIRST CHECK FOR IF A KEY-PRESS NEEDS TO OCCUR
+        if currentPress == 1 and currentStatus == 0:
+            # THIS KEY WAS NOT ACTIVE BEFORE, AND HAS BEEN PRESSED NOW: ACTIVATE KEYSTROKE!
+            # UPDATE GLOBAL PRESS ARRAY
+            WriteKeypressArray(keyCounter, 1)
+            
+            # IF THE KEYBOARD IS ENABLED, SEND THE KEYSTROKE. OTHERWISE, PRINT TO TERMINAL
+            if keyControlEnabled == True:
+                SendKeypress(keyCounter, gameStyle)
+            else:
+                print("Key pressed index: ", end="")
+                print(keyCounter)
+        elif currentPress == 0 and currentStatus == 1:
+            # THIS KEY WAS ACTIVE BEFORE, AND HAS BEEN RELEASED: RELEASE THE KEYSTROKE!
+            # UPDATE GLOBAL PRESS ARRAY
+            WriteKeypressArray(keyCounter, 0)
+            
+            # IF KEYBOARD IS ENABLED, SEND THE KEY-RELEASE. OTHERWISE, PRINT TO TERMINAL
+            if keyControlEnabled == True:
+                SendKeyrelease(keyCounter, gameStyle)
+            else:
+                print("Key released index: ", end="")
+                print(keyCounter)
+        else:
+            pass
 
 """ ALL GLOBAL PYTHON ARRAYS WILL BE DEFINED BELOW"""
 # CREATE ALL DATA ARRAYS NEEDED FOR THE PROGRAM. ARRAY TYPE CAN BE SPECIFIED, IN EFFORT
@@ -354,6 +472,9 @@ sensorData_detection = array.array('B')
 for rowCounter in range(numOfSensorRows):
     for colCounter in range(numOfSensorCols):
         sensorData_detection.append(0)
+keypress_data = array.array('B')
+for arrayCounter in range(5):
+    keypress_data.append(0)
 
 """ BEGIN THE ACTUAL PROCESS OF THE PROGRAM """
 # CALIBRATE THE SENSOR MATRIX BY FINDING THE LOW RANGE OF SENSORS
@@ -361,6 +482,9 @@ for rowCounter in range(numOfSensorRows):
 CalibrateLow()
 print(sensorData_low)
 time.sleep(3)
+
+# CREATE GLOBAL KEYBOARD OBJECT FOR KEYBOARD CONTROL
+picoKeyboard = Keyboard(usb_hid.devices)
 
 # ENTER MAIN LOOP TO REPEAT PROCESSES
 while True:
@@ -376,13 +500,18 @@ while True:
     # TRANSLATE PRESSES INTO POSSIBLE ARROW KEYS
     pressesDDR = CheckArrowPressesDDR()
     
+    # CHECK IF KEYBOARD INPUTS ARE ENABLED USING A SWITCH
+    allowKeyboard = CheckKeyboardEnabled()
+    
+    # SEND THE PRESSES TO THE KEYBOARD MANIPULATION FUNCTION
+    KeyboardControl(pressesDDR, StyleDDR, allowKeyboard)
     
     # CALCULATE HOW LONG IT TOOK FOR THE PROCESSES TO OCCUR
     ms_duration = (((time.monotonic_ns() - start) + 500000)
                // 1000000)
     
     # PRINT OUT THE RESULTS TO THE USER
-    print(pressesDDR)
+    #print(pressesDDR)
     
     # SOME OTHER POSSIBLE PRINTS FOR MORE INFORMATION
     #PrintSensorsVsThresholds()
@@ -390,9 +519,9 @@ while True:
     #PrintPresses()
     
     # PRINT OUT THE TIME IT TOOK TO PERFORM THE PROCESSES
-    print("Time it took this loop: ", end="")
-    print(ms_duration)
+    #print("Time it took this loop: ", end="")
+    #print(ms_duration)
     
     # SLOW DOWN THE PROCESS FOR TERMINAL SANITY
-    time.sleep(0.1)
-    print("-------------------------------")
+    time.sleep(.05)
+    #print("-------------------------------")
